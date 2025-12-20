@@ -1,8 +1,8 @@
 # CorGrid OS - Device Template Composer
 
-**Document ID:** DEVICE-TEMPLATE-COMPOSER-V2
+**Document ID:** DEVICE-TEMPLATE-COMPOSER-V3
 **Data:** 20/12/2025
-**Propósito:** Source of Truth para criação de Device Templates e Sistema de Regras
+**Propósito:** Guia funcional para criação de Device Templates e Sistema de Regras
 **Autoridade:** Core Architecture Team
 
 ---
@@ -10,23 +10,22 @@
 ## Índice
 
 1. [Visão Geral](#1-visão-geral)
-2. [Arquitetura do Device Template](#2-arquitetura-do-device-template)
-3. [Wizard de Criação (5 Passos)](#3-wizard-de-criação-5-passos)
+2. [Estrutura do Device Template](#2-estrutura-do-device-template)
+3. [Processo de Criação](#3-processo-de-criação)
 4. [SensorSlot e Capabilities](#4-sensorslot-e-capabilities)
-5. [Sistema de Regras Avançado](#5-sistema-de-regras-avançado)
+5. [Sistema de Regras](#5-sistema-de-regras)
 6. [Operadores Temporais e Estatísticos](#6-operadores-temporais-e-estatísticos)
-7. [Inferência AI/ML em Regras](#7-inferência-aiml-em-regras)
-8. [Persistência e Serialização](#8-persistência-e-serialização)
-9. [API REST de Templates](#9-api-rest-de-templates)
+7. [Inferência AI/ML](#7-inferência-aiml)
+8. [Formato de Armazenamento](#8-formato-de-armazenamento)
+9. [API REST](#9-api-rest)
 10. [Padronização e Escalabilidade](#10-padronização-e-escalabilidade)
-11. [Performance e Otimizações](#11-performance-e-otimizações)
-12. [Roadmap](#12-roadmap)
+11. [Roadmap](#11-roadmap)
 
 ---
 
 ## 1. Visão Geral
 
-O **Device Template Composer** é o sistema de criação de templates de dispositivos do CorGrid OS. Ele permite modelar equipamentos industriais complexos através de uma abordagem composicional, onde cada template define:
+O **Device Template Composer** é o sistema de criação de templates de dispositivos do CorGrid OS. Permite modelar equipamentos industriais através de uma abordagem composicional, onde cada template define:
 
 - **Metadados** - Identificação do dispositivo (fabricante, modelo, categoria)
 - **Assets** - Recursos visuais (imagem 2D, modelo 3D, manual PDF)
@@ -42,17 +41,17 @@ O **Device Template Composer** é o sistema de criação de templates de disposi
 │                                                                         │
 │   ┌───────────────────┐             ┌───────────────────┐               │
 │   │                   │             │ Gerador-001       │               │
-│   │  GERADOR DIESEL   │────────────►│ Fábrica: São Paulo│               │
+│   │  GERADOR DIESEL   │────────────►│ Local: São Paulo  │               │
 │   │  500KVA           │             └───────────────────┘               │
 │   │                   │                                                 │
 │   │  • 5 SensorSlots  │             ┌───────────────────┐               │
 │   │  • 4 Regras       │────────────►│ Gerador-002       │               │
-│   │  • Modelo 3D      │             │ Fábrica: Curitiba │               │
+│   │  • Modelo 3D      │             │ Local: Curitiba   │               │
 │   │                   │             └───────────────────┘               │
 │   └───────────────────┘                                                 │
 │                                     ┌───────────────────┐               │
 │                        ────────────►│ Gerador-003       │               │
-│                                     │ Fábrica: Manaus   │               │
+│                                     │ Local: Manaus     │               │
 │                                     └───────────────────┘               │
 │                                                                         │
 │   1 Template = N Instâncias com mesmas regras e estrutura               │
@@ -62,55 +61,33 @@ O **Device Template Composer** é o sistema de criação de templates de disposi
 
 ---
 
-## 2. Arquitetura do Device Template
+## 2. Estrutura do Device Template
 
-### 2.1. Interface DeviceTemplate
+### 2.1. Componentes do Template
 
-**Fonte:** `www/src/stores/useDeviceWizardStore.ts:9-28`
+Um Device Template é composto por:
 
-```typescript
-export interface DeviceTemplate {
-  id: string;
-  metadata: {
-    name: string;
-    manufacturer: string;
-    model: string;
-    description?: string;
-    category?: 'machine' | 'vehicle' | 'panel' | 'sensor' | 'actuator' | 'controller' | 'gateway' | 'display';
-    specs?: Record<string, any>;
-  };
-  assets: {
-    image_2d?: string;    // Path do servidor
-    model_3d?: string;    // GLB/GLTF
-    manual?: string;      // PDF
-  };
-  camera?: {
-    position: [number, number, number];
-    target: [number, number, number];
-  };
-  slots: SensorSlot[];
-}
-```
+| Componente | Descrição |
+|------------|-----------|
+| **id** | Identificador único do template |
+| **metadata** | Nome, fabricante, modelo, categoria, especificações |
+| **assets** | Imagem 2D, modelo 3D (GLB/GLTF), manual PDF |
+| **camera** | Posição inicial da câmera para visualização 3D |
+| **slots** | Lista de pontos de conexão para sensores |
+| **embedded_rules** | Regras de automação embutidas no template |
 
-### 2.2. SensorSlot - Ponto de Conexão
+### 2.2. Categorias de Device
 
-**Fonte:** `www/src/stores/useDeviceWizardStore.ts:30-42`
-
-```typescript
-export interface SensorSlot {
-  id: string;
-  name: string;
-  allowedTypes: string[];  // ['temperature', 'vibration', 'pressure']
-  geometry?: {
-    mesh_target: string;
-    position: [number, number, number];
-  } | null;
-  ui2d?: {
-    x: number;
-    y: number;
-  } | null;
-}
-```
+| Categoria | Descrição |
+|-----------|-----------|
+| sensor | Dispositivo de coleta de dados |
+| actuator | Dispositivo de atuação/controle |
+| controller | Controlador lógico (CLP, RTU) |
+| gateway | Concentrador de comunicação |
+| display | Interface de visualização |
+| machine | Máquina/equipamento complexo |
+| vehicle | Veículo ou equipamento móvel |
+| panel | Painel elétrico/de controle |
 
 ### 2.3. Diagrama de Estrutura
 
@@ -144,12 +121,6 @@ export interface SensorSlot {
 │   │  │ Pos: [0,1.5,0]  │  │ Pos: [0.5,1,0]  │  │ Pos: [-1,0,0]   │  │   │
 │   │  └─────────────────┘  └─────────────────┘  └─────────────────┘  │   │
 │   │                                                                 │   │
-│   │  ┌─────────────────┐  ┌─────────────────┐                       │   │
-│   │  │ Slot: pressao   │  │ Slot: vibracao  │                       │   │
-│   │  │ Types: [pres]   │  │ Types: [vib]    │                       │   │
-│   │  │ Pos: [1,0.5,0]  │  │ Pos: [0,0.5,0]  │                       │   │
-│   │  └─────────────────┘  └─────────────────┘                       │   │
-│   │                                                                 │   │
 │   └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
 │   ┌─────────────────────────────────────────────────────────────────┐   │
@@ -165,87 +136,69 @@ export interface SensorSlot {
 
 ---
 
-## 3. Wizard de Criação (5 Passos)
+## 3. Processo de Criação
 
-### 3.1. Visão Geral do Wizard
+### 3.1. Etapas de Criação
 
-**Fonte:** `www/src/pages/Library/Library/DeviceWizard.tsx`
-
-O wizard de criação de Device Templates possui 5 passos sequenciais:
+A criação de um Device Template segue 5 etapas:
 
 ```
 ┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐
-│ PASSO  │──►│ PASSO  │──►│ PASSO  │──►│ PASSO  │──►│ PASSO  │
+│ ETAPA  │──►│ ETAPA  │──►│ ETAPA  │──►│ ETAPA  │──►│ ETAPA  │
 │   1    │   │   2    │   │   3    │   │   4    │   │   5    │
 │        │   │        │   │        │   │        │   │        │
-│ 📝     │   │ 🌐     │   │ ⚡     │   │ 🔌     │   │ ✅     │
-│ Basic  │   │Network │   │Capabil.│   │Integr. │   │Review  │
-│ Info   │   │Config  │   │        │   │        │   │        │
+│ Info   │   │ Rede   │   │Capacid.│   │Integr. │   │Revisão │
+│ Básica │   │        │   │        │   │        │   │        │
 └────────┘   └────────┘   └────────┘   └────────┘   └────────┘
 ```
 
-### 3.2. Passo 1: Informações Básicas
+### 3.2. Etapa 1: Informações Básicas
 
-**Campos obrigatórios:**
+| Campo | Obrigatório | Descrição |
+|-------|-------------|-----------|
+| name | Sim | Nome do template |
+| type | Sim | physical ou virtual |
+| category | Sim | Categoria do device |
+| manufacturer | Não | Fabricante |
+| model | Não | Modelo |
+| description | Não | Descrição detalhada |
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `name` | string | Nome do template (único) |
-| `type` | enum | `physical` ou `virtual` |
-| `category` | enum | sensor, actuator, controller, gateway, display |
-
-**Categorias de Device:**
-
-```typescript
-const DEVICE_CATEGORIES = [
-  { value: 'sensor', label: 'Sensor', icon: '📡' },
-  { value: 'actuator', label: 'Atuador', icon: '⚙️' },
-  { value: 'controller', label: 'Controlador', icon: '🎛️' },
-  { value: 'gateway', label: 'Gateway', icon: '🌐' },
-  { value: 'display', label: 'Display', icon: '📺' }
-];
-```
-
-### 3.3. Passo 2: Configuração de Rede
+### 3.3. Etapa 2: Configuração de Rede
 
 **Protocolos suportados:**
 
-| Protocolo | Categoria | Configuração |
-|-----------|-----------|--------------|
+| Protocolo | Categoria | Parâmetros |
+|-----------|-----------|------------|
 | Modbus TCP | Industrial | IP, Porta, Unit ID |
 | Modbus RTU | Industrial | Serial, Baud, Parity |
-| OPC UA | Industrial | Endpoint, Security |
+| OPC UA | Industrial | Endpoint, Security Mode |
 | MQTT | IoT | Broker, Topic, QoS |
-| REST API | Web | Endpoint, Auth |
+| REST API | Web | Endpoint, Auth Type |
 | WebSocket | Realtime | URL, Subprotocol |
 | CAN Bus | Automotive | Bitrate, Node ID |
 | ProfiNet | Industrial | GSD, IP |
 | EtherNet/IP | Industrial | IP, Assembly |
 
-### 3.4. Passo 3: Capabilities (Capacidades)
+### 3.4. Etapa 3: Capabilities
 
-Define as capacidades operacionais do device:
+Capacidades operacionais do device:
 
-```typescript
-interface DeviceCapabilities {
-  monitoring: boolean;      // Coleta de dados
-  control: boolean;         // Envio de comandos
-  dataProcessing: boolean;  // Processamento local
-  visualization: boolean;   // Interface visual
-}
-```
+| Capability | Descrição |
+|------------|-----------|
+| monitoring | Coleta de dados de sensores |
+| control | Envio de comandos para atuadores |
+| dataProcessing | Processamento local de dados |
+| visualization | Capacidade de exibir informações |
 
-### 3.5. Passo 4: Integração
-
-**Opções de integração:**
+### 3.5. Etapa 4: Integração
 
 | Opção | Descrição |
 |-------|-----------|
-| `protocols` | Lista de protocolos habilitados |
-| `apiEndpoints` | Expor via REST API |
-| `webInterface` | Interface web embarcada |
+| protocols | Lista de protocolos habilitados |
+| apiEndpoints | Exposição via REST API |
+| webInterface | Interface web embarcada |
 
-### 3.6. Passo 5: Review e Publicação
+### 3.6. Etapa 5: Revisão
 
 Validação final e publicação do template na biblioteca.
 
@@ -253,54 +206,41 @@ Validação final e publicação do template na biblioteca.
 
 ## 4. SensorSlot e Capabilities
 
-### 4.1. Associação Slot → Capability
+### 4.1. O que é um SensorSlot
 
-Os SensorSlots definem **pontos de conexão** onde sensores reais são acoplados ao template. Cada slot aceita tipos específicos de capabilities.
+Um **SensorSlot** é um ponto de conexão no template onde sensores ou atuadores reais serão acoplados. Cada slot define:
 
-**Fonte:** `www/src/stores/useSensorWizardStore.ts:8-24`
+| Campo | Descrição |
+|-------|-----------|
+| id | Identificador único do slot |
+| name | Nome descritivo |
+| allowedTypes | Tipos de sensor/atuador aceitos |
+| geometry | Posição 3D no modelo |
+| ui2d | Posição na visualização 2D |
 
-```typescript
-export interface Capability {
-  id: string;
-  name: string;
-  type: 'number' | 'boolean' | 'string' | 'enum';
-  unit?: string;
-  min?: number;
-  max?: number;
-  options?: string[];  // Para enum
-  geometry?: {
-    mesh_target: string;
-    position: [number, number, number];
-  } | null;
-  ui2d?: {
-    x: number;
-    y: number;
-  } | null;
-}
-```
+### 4.2. Tipos de Capabilities
 
-### 4.2. Presets de Capabilities por Categoria
+**Sensores (Entrada de Dados):**
 
-**Fonte:** `www/src/constants/sensorPresets.ts`
+| Categoria | Capabilities |
+|-----------|--------------|
+| Environmental | Temperature, Humidity, Pressure, Illuminance, CO2, PM2.5, Noise |
+| Energy | Voltage, Current, Active Power, Reactive Power, Energy, Power Factor |
+| Motion | Acceleration (X/Y/Z), Gyroscope, Orientation, Magnetometer |
+| Security | Occupancy, Door Contact, Vibration, Tamper, Smoke |
+| Location | Latitude, Longitude, Altitude, Speed |
 
-O sistema oferece presets organizados por categoria:
+**Atuadores (Saída de Comandos):**
 
-| Categoria | Tipo | Exemplos de Capabilities |
-|-----------|------|--------------------------|
-| Environmental | sensor | Temperature, Humidity, Pressure, Illuminance, CO2, PM2.5, Noise |
-| Energy & Electrical | sensor | Voltage, Current, Active Power, Reactive Power, Energy, Power Factor, Frequency |
-| Motion & Inertial | sensor | Acceleration (X/Y/Z), Gyroscope, Orientation, Magnetometer |
-| Security & Presence | sensor | Occupancy (PIR), Door Contact, Vibration, Tamper, Smoke |
-| Location | sensor | Latitude, Longitude, Altitude, Speed, GPS Accuracy |
-| Switching & Control | actuator | Switch, Dimmer, Relay, PWM, Scene Select |
-| HVAC Control | actuator | Target Temp, Mode, Fan Speed, Valve Position |
-| Motors & Drives | actuator | Target Speed, Direction, Torque Limit, E-Stop |
-| Lighting & Color | actuator | CCT, RGB, Hue, Saturation |
-| Industrial I/O | actuator | Analog Output (0-10V, 4-20mA), Digital Output, Alarm Reset, PID Setpoint |
+| Categoria | Capabilities |
+|-----------|--------------|
+| Switching | Switch, Dimmer, Relay, PWM |
+| HVAC | Target Temp, Mode, Fan Speed, Valve Position |
+| Motors | Target Speed, Direction, Torque Limit, E-Stop |
+| Lighting | CCT, RGB, Hue, Saturation |
+| Industrial | Analog Output (0-10V, 4-20mA), Digital Output, PID Setpoint |
 
-### 4.3. Mapeamento Slot → Sensor Template
-
-Quando uma instância de device é criada a partir de um template, cada **SensorSlot** é preenchido com um **SensorTemplate** compatível:
+### 4.3. Mapeamento Slot → Sensor
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -311,21 +251,12 @@ Quando uma instância de device é criada a partir de um template, cada **Sensor
 │   │ Slot: temp_motor  │◄────────────►│ PT100 Temperature │              │
 │   │ allowedTypes:     │              │ Capabilities:     │              │
 │   │  ['temperature']  │              │  • Temperature °C │              │
-│   └───────────────────┘              │  • Resistance Ω   │              │
-│                                      └───────────────────┘              │
+│   └───────────────────┘              └───────────────────┘              │
 │                                                                         │
 │   ┌───────────────────┐              ┌───────────────────┐              │
 │   │ Slot: vibracao    │◄────────────►│ Vibration Sensor  │              │
 │   │ allowedTypes:     │              │ Capabilities:     │              │
-│   │  ['vibration',    │              │  • Velocity mm/s  │              │
-│   │   'acceleration'] │              │  • Accel m/s²     │              │
-│   └───────────────────┘              └───────────────────┘              │
-│                                                                         │
-│   ┌───────────────────┐              ┌───────────────────┐              │
-│   │ Slot: nivel_comb  │◄────────────►│ Level Transmitter │              │
-│   │ allowedTypes:     │              │ Capabilities:     │              │
-│   │  ['level',        │              │  • Level %        │              │
-│   │   'volume']       │              │  • Volume L       │              │
+│   │  ['vibration']    │              │  • Velocity mm/s  │              │
 │   └───────────────────┘              └───────────────────┘              │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -333,181 +264,124 @@ Quando uma instância de device é criada a partir de um template, cada **Sensor
 
 ---
 
-## 5. Sistema de Regras Avançado
+## 5. Sistema de Regras
 
-### 5.1. Arquitetura do Rule Engine
+### 5.1. Conceito de Regras Embutidas
 
-**Fonte:** `www/src/services/rulesService.ts`
+Regras embutidas são automações que viajam com o template. Quando o template é instanciado, as regras são automaticamente ativadas para a nova instância.
 
-O sistema de regras do CorGrid utiliza uma DSL (Domain-Specific Language) para definir condições e ações.
+### 5.2. Estrutura de uma Regra
 
-```typescript
-export interface Rule {
-  id: string;
-  name: string;
-  description: string;
-  dsl: string;
-  status: 'active' | 'inactive' | 'draft';
-  priority: number;
-  conditions: Condition[];
-  actions: Action[];
-  statistics: ExecutionStatistics;
-  created_at: string;
-  updated_at: string;
-  tags: string[];
-}
-```
+| Campo | Descrição |
+|-------|-----------|
+| id | Identificador único |
+| name | Nome descritivo |
+| description | Descrição da lógica |
+| dsl | Expressão DSL da regra |
+| status | active, inactive, draft |
+| priority | Prioridade de execução (1-100) |
+| conditions | Lista de condições |
+| actions | Lista de ações |
 
-### 5.2. Estrutura de Condições
+### 5.3. DSL - Domain Specific Language
 
-```typescript
-export interface Condition {
-  type: 'MQTT' | 'STATE' | 'TIME' | 'COMPOSITE';
-  target: string;
-  operator: string;
-  value: string;
-  duration_seconds?: number;        // Operador temporal
-  composite_conditions?: Condition[];
-  composite_operator?: string;      // AND, OR, NOT
-  negate?: boolean;
-}
-```
-
-### 5.3. Estrutura de Ações
-
-```typescript
-export interface Action {
-  type: 'MQTT_PUBLISH' | 'HTTP_CALL' | 'LOG' | 'NOTIFICATION';
-  target: string;
-  payload: string;
-  method?: string;   // Para HTTP
-  channel?: string;  // Para Notification
-}
-```
-
-### 5.4. DSL - Domain Specific Language
-
-**Fonte:** `www/src/pages/RulesEngine/RuleBuilder.tsx:146-184`
-
-A DSL é gerada automaticamente a partir dos blocos visuais:
+A DSL do CorGrid segue a sintaxe:
 
 ```
 WHEN <condições>
 THEN <ações>
 ```
 
-**Exemplos de DSL:**
+**Exemplos:**
 
 ```dsl
-# Regra simples
-WHEN zigbee/devices/temp_sensor/temperature > 30
-THEN PUBLISH {"alert": "high_temp"} TO zigbee/commands/fan
- AND LOG WARNING "High temperature detected"
+# Regra simples de temperatura
+WHEN temperature > 80
+THEN ALERT "Temperatura elevada"
 
 # Regra com operador temporal
-WHEN device.zigbee.motion_sensor.status == "offline" FOR 600 seconds
-THEN NOTIFY "Device offline alert" "Motion sensor is offline" VIA EMAIL
- AND LOG ERROR "Device offline: motion_sensor"
+WHEN flow_rate < 5 FOR 60 seconds
+THEN ALERT "Fluxo baixo prolongado"
+ AND SHUTDOWN pump
 
 # Regra com múltiplas condições
-WHEN modbus/device/energy_meter/power > 5000 FOR 3600 seconds
-THEN LOG INFO "High energy consumption detected: ${power}W"
- AND PUBLISH {"energy_alert": true} TO system/alerts/energy
+WHEN pump_status == "on" AND flow_rate < 5 AND motor_current > 2
+THEN ALERT "Possível falha de bomba"
 ```
 
-### 5.5. Tipos de Condições no RuleBuilder
-
-**Fonte:** `www/src/pages/RulesEngine/RuleBuilder.tsx:27-43`
+### 5.4. Tipos de Condições
 
 | Tipo | Descrição | Exemplo |
 |------|-----------|---------|
-| `mqtt` | Tópico MQTT | `zigbee/devices/sensor/temperature > 30` |
-| `device` | Estado de Device | `device.pump.status == "running"` |
-| `time` | Schedule/Cron | `time.schedule == true` |
-| `logic` | Operador Lógico | `AND`, `OR`, `NOT` |
+| MQTT | Valor de tópico MQTT | `sensors/temp > 30` |
+| STATE | Estado de device | `device.pump.status == "running"` |
+| TIME | Condição temporal | `time.hour >= 22` |
+| COMPOSITE | Combinação lógica | `A AND B`, `A OR B` |
 
-### 5.6. Tipos de Ações
+### 5.5. Tipos de Ações
 
 | Tipo | Descrição | Exemplo |
 |------|-----------|---------|
-| `mqtt` | Publicar MQTT | `PUBLISH {"cmd": "on"} TO device/relay` |
-| `log` | Registrar Log | `LOG WARNING "Alerta de temperatura"` |
-| `notification` | Enviar Notificação | `NOTIFY "Alerta" VIA EMAIL` |
-| `http` | Chamada HTTP | `HTTP POST /api/alert WITH {...}` |
+| PUBLISH | Publicar em MQTT | `PUBLISH {"cmd":"off"} TO device/relay` |
+| LOG | Registrar log | `LOG WARNING "Alerta"` |
+| NOTIFY | Enviar notificação | `NOTIFY "Título" VIA email` |
+| HTTP | Chamada HTTP | `HTTP POST /api/alert` |
+| SET | Alterar estado | `SET device.status = "warning"` |
 
 ---
 
 ## 6. Operadores Temporais e Estatísticos
 
-### 6.1. Categorias de Operadores
-
-**Fonte:** `www/src/pages/Config/tabs/modals/RuleOperatorModal.tsx:25-30`
-
-```typescript
-const OPERATOR_CATEGORIES = [
-  { value: 'comparison', label: 'Comparison' },
-  { value: 'logical', label: 'Logical' },
-  { value: 'mathematical', label: 'Mathematical' },
-  { value: 'temporal', label: 'Temporal' },
-];
-```
-
-### 6.2. Operadores de Comparação
-
-| Operador | Símbolo | Descrição | Tipos Suportados |
-|----------|---------|-----------|------------------|
-| Equal | `==` | Igualdade | string, number, boolean |
-| NotEqual | `!=` | Diferença | string, number, boolean |
-| GreaterThan | `>` | Maior que | number, date |
-| LessThan | `<` | Menor que | number, date |
-| GreaterOrEqual | `>=` | Maior ou igual | number, date |
-| LessOrEqual | `<=` | Menor ou igual | number, date |
-| Contains | `contains` | Contém substring | string, array |
-| StartsWith | `startswith` | Começa com | string |
-| EndsWith | `endswith` | Termina com | string |
-| In | `in` | Está na lista | string, number |
-| NotIn | `notin` | Não está na lista | string, number |
-| Between | `between` | Entre valores | number, date |
-| IsNull | `isnull` | É nulo | any |
-| IsNotNull | `isnotnull` | Não é nulo | any |
-
-### 6.3. Operadores Lógicos
+### 6.1. Operadores de Comparação
 
 | Operador | Símbolo | Descrição |
 |----------|---------|-----------|
-| AND | `AND` | Todas as condições verdadeiras |
-| OR | `OR` | Pelo menos uma condição verdadeira |
-| NOT | `NOT` | Nega a condição |
-| XOR | `XOR` | Exclusivo OR |
+| Equal | `==` | Igualdade |
+| NotEqual | `!=` | Diferença |
+| GreaterThan | `>` | Maior que |
+| LessThan | `<` | Menor que |
+| GreaterOrEqual | `>=` | Maior ou igual |
+| LessOrEqual | `<=` | Menor ou igual |
+| Between | `between` | Entre valores |
+| In | `in` | Na lista |
 
-### 6.4. Operadores Temporais
+### 6.2. Operadores Lógicos
+
+| Operador | Descrição |
+|----------|-----------|
+| AND | Todas verdadeiras |
+| OR | Pelo menos uma verdadeira |
+| NOT | Negação |
+| XOR | Exclusivo OR |
+
+### 6.3. Operadores Temporais
 
 | Operador | Sintaxe | Descrição |
 |----------|---------|-----------|
 | FOR | `condition FOR X seconds` | Condição mantida por período |
 | SINCE | `condition SINCE timestamp` | Condição desde momento |
-| WITHIN | `condition WITHIN X minutes` | Ocorreu dentro do período |
+| WITHIN | `condition WITHIN X minutes` | Ocorreu no período |
 | RATE | `RATE(value, period)` | Taxa de variação |
 | DEBOUNCE | `DEBOUNCE(condition, X seconds)` | Anti-flicker |
 | THROTTLE | `THROTTLE(action, X seconds)` | Limita frequência |
 
-**Exemplo de uso:**
+**Exemplos:**
 
 ```dsl
-# Proteção contra flutuação (debounce)
-WHEN DEBOUNCE(temperature > 80, 30 seconds)
-THEN ALERT "Temperatura elevada confirmada"
+# Condição sustentada por tempo
+WHEN pressure < 2 FOR 60 seconds
+THEN ALERT "Pressão baixa prolongada"
 
-# Detecção de tendência (rate)
+# Taxa de variação
 WHEN RATE(temperature, 5 minutes) > 2
 THEN ALERT "Temperatura subindo rapidamente"
 
-# Condição sustentada (for)
-WHEN pressure < 2 bar FOR 60 seconds
-THEN SHUTDOWN "Pressão baixa prolongada"
+# Anti-flicker
+WHEN DEBOUNCE(temperature > 80, 30 seconds)
+THEN ALERT "Temperatura elevada confirmada"
 ```
 
-### 6.5. Operadores Estatísticos
+### 6.4. Operadores Estatísticos
 
 | Operador | Sintaxe | Descrição |
 |----------|---------|-----------|
@@ -518,132 +392,70 @@ THEN SHUTDOWN "Pressão baixa prolongada"
 | COUNT | `COUNT(field, period)` | Contagem no período |
 | STDDEV | `STDDEV(field, period)` | Desvio padrão |
 | PERCENTILE | `PERCENTILE(field, p, period)` | Percentil |
-| DELTA | `DELTA(field, period)` | Variação absoluta |
 | TREND | `TREND(field, period)` | Tendência (up/down/stable) |
 
-**Exemplo de uso:**
+**Exemplos:**
 
 ```dsl
 # Média móvel
 WHEN AVG(temperature, 15 minutes) > 75
-THEN ALERT "Média de temperatura elevada"
+THEN ALERT "Média elevada"
 
-# Desvio do padrão
-WHEN STDDEV(vibration, 1 hour) > 2
-THEN LOG WARNING "Variabilidade de vibração anormal"
-
-# Tendência de queda
+# Tendência
 WHEN TREND(pressure, 30 minutes) == "down" AND pressure < 3
-THEN ALERT "Pressão caindo - verificar vazamento"
+THEN ALERT "Pressão caindo"
 ```
 
 ---
 
-## 7. Inferência AI/ML em Regras
+## 7. Inferência AI/ML
 
-### 7.1. Arquitetura de Inferência
+### 7.1. Integração com Modelos
 
-O CorGrid suporta integração de modelos ML nas regras através de operadores especializados:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                         │
-│                    PIPELINE DE INFERÊNCIA ML                            │
-│                                                                         │
-│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                 │
-│   │   DADOS     │───►│   FEATURE   │───►│   MODELO    │                 │
-│   │   SENSOR    │    │   EXTRACT   │    │     ML      │                 │
-│   └─────────────┘    └─────────────┘    └──────┬──────┘                 │
-│                                                │                        │
-│                                                ▼                        │
-│                                        ┌─────────────┐                  │
-│                                        │  PREDIÇÃO   │                  │
-│                                        │  / SCORE    │                  │
-│                                        └──────┬──────┘                  │
-│                                                │                        │
-│                                                ▼                        │
-│                                        ┌─────────────┐                  │
-│                                        │   REGRA     │                  │
-│                                        │   ENGINE    │                  │
-│                                        └─────────────┘                  │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+O CorGrid suporta integração de modelos ONNX nas regras para decisões baseadas em Machine Learning.
 
 ### 7.2. Operadores ML
 
 | Operador | Sintaxe | Descrição |
 |----------|---------|-----------|
-| PREDICT | `PREDICT(model_id, features)` | Executar predição |
+| PREDICT | `PREDICT(model_id, features)` | Predição |
 | CLASSIFY | `CLASSIFY(model_id, features)` | Classificação |
 | ANOMALY | `ANOMALY(model_id, features)` | Score de anomalia |
 | FORECAST | `FORECAST(model_id, field, horizon)` | Previsão futura |
 
-### 7.3. Exemplos de Regras com ML
+### 7.3. Exemplos
 
 ```dsl
-# Detecção de anomalia
-WHEN ANOMALY("vibration_model", [vibration_x, vibration_y, vibration_z]) > 0.85
-THEN ALERT "Padrão de vibração anômalo detectado"
- AND LOG INFO "Anomaly score: ${anomaly_score}"
-
 # Manutenção preditiva
 WHEN PREDICT("bearing_failure", [temperature, vibration, rpm]) > 0.7
-THEN NOTIFY "Manutenção Preditiva" "Rolamento com probabilidade de falha" VIA EMAIL
- AND CREATE_TICKET "Inspecionar rolamento ${device_id}"
+THEN NOTIFY "Manutenção necessária" VIA email
 
-# Previsão de consumo
-WHEN FORECAST("energy_model", power_consumption, "24h") > capacity_limit
-THEN ALERT "Consumo previsto acima da capacidade"
- AND SCHEDULE_ACTION "reduce_load" AT "peak_hours"
+# Detecção de anomalia
+WHEN ANOMALY("vibration_model", [vib_x, vib_y, vib_z]) > 0.85
+THEN ALERT "Padrão anômalo detectado"
 
 # Classificação de estado
-WHEN CLASSIFY("machine_state", [temp, pressure, rpm, vibration]) == "degraded"
+WHEN CLASSIFY("machine_state", [temp, pressure, rpm]) == "degraded"
 THEN SET device.health_status = "warning"
- AND LOG WARNING "Máquina em estado degradado - monitorar"
 ```
 
-### 7.4. Modelos Pré-treinados
-
-O CorGrid inclui modelos pré-treinados para casos comuns:
+### 7.4. Modelos Disponíveis
 
 | Modelo ID | Tipo | Aplicação |
 |-----------|------|-----------|
-| `anomaly_generic` | Isolation Forest | Detecção de anomalias genéricas |
-| `bearing_failure` | Random Forest | Predição de falha de rolamentos |
-| `thermal_stress` | Gradient Boosting | Estresse térmico |
-| `vibration_pattern` | CNN | Classificação de padrões de vibração |
-| `energy_forecast` | LSTM | Previsão de consumo energético |
-| `maintenance_window` | Survival Analysis | Janela ótima de manutenção |
-
-### 7.5. Treinamento de Modelos Customizados
-
-```
-POST /api/v1/ml/models
-Content-Type: application/json
-
-{
-  "name": "motor_health_predictor",
-  "type": "classification",
-  "algorithm": "random_forest",
-  "features": [
-    "temperature",
-    "vibration_rms",
-    "current_draw",
-    "rpm_variance"
-  ],
-  "target": "health_status",
-  "training_data": "device_data_last_90_days"
-}
-```
+| anomaly_generic | Isolation Forest | Anomalias genéricas |
+| bearing_failure | Random Forest | Falha de rolamentos |
+| thermal_stress | Gradient Boosting | Estresse térmico |
+| vibration_pattern | CNN | Padrões de vibração |
+| energy_forecast | LSTM | Consumo energético |
 
 ---
 
-## 8. Persistência e Serialização
+## 8. Formato de Armazenamento
 
-### 8.1. Formato de Armazenamento
+### 8.1. Estrutura JSON
 
-Templates são persistidos em formato JSON no backend:
+Templates são armazenados em formato JSON:
 
 ```json
 {
@@ -681,15 +493,14 @@ Templates são persistidos em formato JSON no backend:
       "geometry": {
         "mesh_target": "motor_housing",
         "position": [0.5, 1.2, 0]
-      },
-      "ui2d": { "x": 150, "y": 200 }
+      }
     }
   ],
   "embedded_rules": [
     {
       "id": "rule_thermal_protection",
       "name": "Proteção Térmica",
-      "dsl": "WHEN slot_temp_motor.value > 110 FOR 30 seconds THEN SET relay_main = OFF AND ALERT \"Shutdown térmico\"",
+      "dsl": "WHEN slot_temp_motor.value > 110 FOR 30 seconds THEN SHUTDOWN",
       "priority": 100,
       "enabled": true
     }
@@ -697,38 +508,11 @@ Templates são persistidos em formato JSON no backend:
 }
 ```
 
-### 8.2. Zustand Store com Persistência
-
-**Fonte:** `www/src/stores/useDeviceWizardStore.ts`
-
-O wizard utiliza Zustand com middleware de persistência:
-
-```typescript
-export const useDeviceWizardStore = create<WizardState>()(
-  devtools(
-    persist(
-      (set) => ({
-        currentStep: 1,
-        template: INITIAL_TEMPLATE,
-        // ... actions
-      }),
-      {
-        name: 'device-wizard-storage',
-        partialize: (state) => ({
-          currentStep: state.currentStep,
-          template: state.template
-        })
-      }
-    )
-  )
-);
-```
-
 ---
 
-## 9. API REST de Templates
+## 9. API REST
 
-### 9.1. Endpoints
+### 9.1. Endpoints de Templates
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
@@ -742,8 +526,6 @@ export const useDeviceWizardStore = create<WizardState>()(
 
 ### 9.2. Endpoints de Regras
 
-**Fonte:** `www/src/services/rulesService.ts`
-
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
 | GET | `/api/v1/rules` | Listar regras |
@@ -753,31 +535,6 @@ export const useDeviceWizardStore = create<WizardState>()(
 | DELETE | `/api/v1/rules/:id` | Excluir regra |
 | POST | `/api/v1/rules/validate` | Validar DSL |
 | POST | `/api/v1/rules/:id/test` | Testar regra |
-| PATCH | `/api/v1/rules/:id/status` | Alterar status |
-
-### 9.3. Exemplo de Criação
-
-```typescript
-const createTemplate = async (template: CreateTemplateRequest) => {
-  const response = await api.post('/api/v1/templates', template);
-  return response.data;
-};
-
-interface CreateTemplateRequest {
-  metadata: {
-    name: string;
-    manufacturer: string;
-    model: string;
-    category: string;
-  };
-  assets?: {
-    image_2d?: string;
-    model_3d?: string;
-  };
-  slots: SensorSlot[];
-  embedded_rules?: EmbeddedRule[];
-}
-```
 
 ---
 
@@ -792,15 +549,17 @@ interface CreateTemplateRequest {
 | Rule ID | `rule_{funcao}` | `rule_thermal_protection` |
 | Instance ID | `inst_{template}_{seq}` | `inst_gerador_001` |
 
-### 10.2. Versionamento de Templates
+### 10.2. Versionamento
+
+Templates suportam versionamento semântico:
 
 ```json
 {
   "version": "1.2.0",
   "version_history": [
-    { "version": "1.0.0", "date": "2025-01-15", "changes": "Initial release" },
-    { "version": "1.1.0", "date": "2025-03-20", "changes": "Added vibration slot" },
-    { "version": "1.2.0", "date": "2025-06-10", "changes": "ML rules integration" }
+    { "version": "1.0.0", "date": "2025-01-15", "changes": "Versão inicial" },
+    { "version": "1.1.0", "date": "2025-03-20", "changes": "Adicionado slot vibração" },
+    { "version": "1.2.0", "date": "2025-06-10", "changes": "Regras ML" }
   ]
 }
 ```
@@ -826,13 +585,7 @@ Templates podem herdar de templates base:
 
 ```json
 {
-  "tags": [
-    "energia",
-    "backup",
-    "diesel",
-    "industrial",
-    "geração"
-  ],
+  "tags": ["energia", "backup", "diesel", "industrial"],
   "categories": {
     "primary": "power_generation",
     "secondary": ["industrial", "backup_systems"]
@@ -842,110 +595,28 @@ Templates podem herdar de templates base:
 
 ---
 
-## 11. Performance e Otimizações
+## 11. Roadmap
 
-### 11.1. Lazy Loading de Assets
+### 11.1. Funcionalidades Atuais
 
-Assets pesados (modelos 3D, manuais PDF) são carregados sob demanda:
+| Feature | Status |
+|---------|--------|
+| Criação de Templates | ✅ Implementado |
+| Slots e Capabilities | ✅ Implementado |
+| Regras com DSL | ✅ Implementado |
+| Operadores Temporais (FOR) | ✅ Implementado |
 
-```typescript
-const loadAsset = async (templateId: string, assetType: 'model_3d' | 'manual') => {
-  const response = await api.get(`/api/v1/templates/${templateId}/assets/${assetType}`, {
-    responseType: 'blob'
-  });
-  return URL.createObjectURL(response.data);
-};
-```
-
-### 11.2. Cache de Templates
-
-```typescript
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
-
-class TemplateCache {
-  private cache = new Map<string, { data: Template; timestamp: number }>();
-
-  get(id: string): Template | null {
-    const entry = this.cache.get(id);
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > CACHE_TTL) {
-      this.cache.delete(id);
-      return null;
-    }
-    return entry.data;
-  }
-
-  set(id: string, template: Template): void {
-    this.cache.set(id, { data: template, timestamp: Date.now() });
-  }
-}
-```
-
-### 11.3. Execução de Regras - Otimizações
-
-| Técnica | Descrição | Ganho |
-|---------|-----------|-------|
-| Rule Indexing | Índice por tópico MQTT | O(1) lookup |
-| Condition Caching | Cache de condições avaliadas | -60% CPU |
-| Batch Processing | Processar múltiplos eventos juntos | -40% overhead |
-| Priority Queue | Fila de prioridade para regras | Críticas primeiro |
-
-### 11.4. Métricas de Execução
-
-**Fonte:** `www/src/services/rulesService.ts:54-60`
-
-```typescript
-export interface ExecutionStatistics {
-  executions_total: number;
-  executions_success: number;
-  executions_failed: number;
-  last_execution: string;
-  average_execution_time_ms: number;
-}
-```
-
----
-
-## 12. Roadmap
-
-### 12.1. Funcionalidades Planejadas
+### 11.2. Funcionalidades Planejadas
 
 | Feature | Status | Prioridade |
 |---------|--------|------------|
-| Visual Rule Builder (Drag & Drop) | ✅ Implementado | - |
-| Operadores Temporais Básicos (FOR) | ✅ Implementado | - |
-| Templates de Regras | ✅ Implementado | - |
-| Operadores Estatísticos (AVG, MIN, MAX) | 🔄 Em Progresso | Alta |
-| Integração ML/AI | 📋 Planejado | Alta |
+| Operadores Estatísticos (AVG, STDDEV) | 🔄 Em Progresso | Alta |
+| Integração ONNX Runtime | 📋 Planejado | Alta |
 | Regras Cross-Device | 📋 Planejado | Média |
-| Rule Debugging | 📋 Planejado | Média |
-| Rule Versioning | 📋 Planejado | Baixa |
-| Rule Marketplace | 📋 Planejado | Baixa |
-
-### 12.2. Integrações Futuras
-
-- **TensorFlow Lite** - Inferência on-edge
-- **ONNX Runtime** - Modelos universais
-- **Apache Kafka** - Streaming de eventos
-- **TimescaleDB** - Dados históricos para ML
+| Template Marketplace | 📋 Planejado | Baixa |
 
 ---
 
-## Referências de Código
-
-| Arquivo | Linhas | Descrição |
-|---------|--------|-----------|
-| `www/src/stores/useDeviceWizardStore.ts` | 189 | Store do Device Template Wizard |
-| `www/src/stores/useSensorWizardStore.ts` | 234 | Store do Sensor Template Wizard |
-| `www/src/pages/Library/Library/DeviceWizard.tsx` | 806 | Componente do Wizard |
-| `www/src/pages/RulesEngine/RuleBuilder.tsx` | 581 | Visual Rule Builder |
-| `www/src/pages/RulesEngine/RulesDashboard.tsx` | 293 | Dashboard de Regras |
-| `www/src/services/rulesService.ts` | 341 | Serviço de Regras (API) |
-| `www/src/constants/sensorPresets.ts` | 137 | Presets de Capabilities |
-| `www/src/pages/Config/tabs/modals/RuleOperatorModal.tsx` | 144 | Modal de Operadores |
-
----
-
-**Versão:** 2.0
+**Versão:** 3.0
 **Última Atualização:** 20/12/2025
 **Mantenedor:** Core Architecture Team
